@@ -4,3 +4,4 @@ _回收站/
 *.jsonl
 .venv/
 *.exe
+*.o
