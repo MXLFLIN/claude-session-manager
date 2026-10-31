@@ -187,6 +187,7 @@ class App:
         self.menu.add_command(label="打开文件位置", command=self.open_folder)
         self.menu.add_separator()
         self.menu.add_command(label="详情", command=self.show_detail)
+        self._has_delete = False      # 「彻底删除」只在回收站视图里临时插进来
 
         # 底部按钮 + 状态
         bottom = ttk.Frame(root, padding=(10, 0, 10, 8))
@@ -250,8 +251,16 @@ class App:
         # 回收站视图里第一项换成「恢复此对话」
         if self.mode == "recycle":
             self.menu.entryconfigure(1, label="恢复此对话", command=self.restore_session)
+            if not self._has_delete:
+                self.menu.insert_command(
+                    4, label="彻底删除此对话", foreground="red",
+                    command=self.purge_session)
+                self._has_delete = True
         else:
             self.menu.entryconfigure(1, label="移到回收站", command=self.recycle)
+            if self._has_delete:
+                self.menu.delete(4)
+                self._has_delete = False
         try:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -357,6 +366,32 @@ class App:
                 messagebox.showerror("恢复失败", s["path"].name + chr(10) + str(e))
         if restored:
             self.load()
+
+    def purge_session(self):
+        """从回收站里永久删除(不进系统回收站)。"""
+        if self.mode != "recycle":
+            return
+        items = [x for x in self.selected()
+                 if str(x["path"]).startswith(str(PROJECTS_ROOT / RECYCLE_NAME))]
+        if not items:
+            return
+        preview = items[0]["title"][:40]
+        more = f" 等 {len(items)} 条" if len(items) > 1 else ""
+        if not messagebox.askyesno(
+                "彻底删除",
+                f"您是否要删除「{preview}」{more}?" + chr(10) + chr(10) +
+                "这将会使此对话从你的磁盘中永久删除,是否确认?",
+                icon="warning"):
+            return
+        for s in items:
+            try:
+                s["path"].unlink(missing_ok=True)
+                sub = s["path"].with_suffix("")
+                if sub.is_dir():
+                    shutil.rmtree(sub, ignore_errors=True)
+            except OSError as e:
+                messagebox.showerror("删除失败", s["path"].name + chr(10) + str(e))
+        self.load()
 
     def show_detail(self, _event=None):
         items = self.selected()
