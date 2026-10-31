@@ -15,7 +15,12 @@ Claude Code 每次对话都存在本地的 `~/.claude/projects/<项目>/<会话i
 
 ## 用法
 
-双击 `sessions_gui.pyw` 即可(需要 Windows 自带的 Python 3,无需安装第三方库)。
+双击 **`ClaudeSessionManager.exe`** 即可(无黑窗)。
+
+也支持双击 `sessions_gui.pyw`(需要 Python 3,无需第三方库)。
+
+exe 是 `launcher.c` 编译出来的小启动器(约 65 KB),只负责用 `pythonw.exe` 打开同目录的 pyw;
+所以 **exe 和 pyw 必须放在同一个文件夹**,且本机要装 Python。
 
 命令行运行:
 
