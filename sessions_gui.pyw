@@ -42,7 +42,7 @@ def scan_sessions():
     for f in PROJECTS_ROOT.glob("*/*.jsonl"):
         if f.parent.name == RECYCLE_NAME:
             continue
-        title, count, cwd = "", 0, ""
+        title, first, count, cwd = "", "", 0, ""
         try:
             with f.open(encoding="utf-8", errors="ignore") as fh:
                 for line in fh:
@@ -56,11 +56,13 @@ def scan_sessions():
                         continue
                     if d.get("type") in ("user", "assistant"):
                         count += 1
-                    if not title and d.get("type") == "user":
+                    if d.get("type") == "ai-title" and d.get("aiTitle"):
+                        title = d["aiTitle"]      # AI 生成的对话标题
+                    if not first and d.get("type") == "user":
                         t = message_text(d.get("message") or {}).strip()
                         # 跳过 <system-reminder>、命令输出这类不是人说的话
                         if t and not t.startswith("<"):
-                            title = " ".join(t.split())[:80]
+                            first = " ".join(t.split())[:200]
         except OSError:
             continue
         if count == 0:
@@ -71,7 +73,8 @@ def scan_sessions():
             "sid": f.stem,
             "project": f.parent.name,
             "cwd": cwd,
-            "title": title or "(无标题)",
+            "title": title or first[:80] or "(无标题)",
+            "first": first,
             "count": count,
             "size": f.stat().st_size,
             "mtime": mtime,
@@ -126,7 +129,7 @@ class App:
         self.tree = ttk.Treeview(base, columns=cols, show="headings", selectmode="extended")
         for c, text, w, anchor in (
             ("time", "时间", 120, "w"),
-            ("title", "首句", 380, "w"),
+            ("title", "标题", 380, "w"),
             ("project", "项目", 200, "w"),
             ("count", "消息数", 70, "e"),
             ("size", "大小", 70, "e"),
@@ -178,7 +181,7 @@ class App:
         q = self.q.get().strip().lower()
         self.shown = []
         for s in self.data:
-            hay = f"{s['title']} {s['cwd'] or project_label(s['project'])} {s['mtime']:%Y-%m-%d %H:%M}".lower()
+            hay = f"{s['title']} {s['first']} {s['cwd'] or project_label(s['project'])} {s['mtime']:%Y-%m-%d %H:%M}".lower()
             if not q or q in hay:
                 self.shown.append(s)
 
@@ -245,7 +248,8 @@ class App:
         body = ttk.Frame(win, padding=12)
         body.pack(fill="both", expand=True)
         rows = [
-            ("首句", s["title"]),
+            ("标题", s["title"]),
+            ("首句", s["first"] or "(无)"),
             ("项目", s["cwd"] or project_label(s["project"])),
             ("时间", s["mtime"].strftime("%Y-%m-%d %H:%M:%S")),
             ("消息数", str(s["count"])),
@@ -262,6 +266,19 @@ class App:
             row=len(rows), column=1, sticky="e", pady=(10, 0))
 
 
+def enable_dark_titlebar(root):
+    """把标题栏涂成和 cmd 窗口一样的深色。"""
+    try:
+        root.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+        on = ctypes.c_int(1)
+        for attr in (20, 19):  # Win10 20H1+ 用 20, 更老的用 19
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, attr, ctypes.byref(on), ctypes.sizeof(on))
+    except Exception:
+        pass
+
+
 def main():
     root = tk.Tk()
     try:
@@ -274,6 +291,7 @@ def main():
     except Exception:
         pass
     App(root, dpi)
+    root.after(300, enable_dark_titlebar, root)   # 等窗口真正显示后再涂色
     root.mainloop()
 
 
