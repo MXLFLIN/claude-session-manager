@@ -437,9 +437,10 @@ class App:
     # ----- 操作 -----
     def t(self, key, **kw):
         text = TR.get(self.lang, TR["zh"]).get(key, key)
+        text = text.replace("{nl}", chr(10))   # 先换行, 再格式化(否则 format 不认识 {nl})
         if kw:
             text = text.format(**kw)
-        return text.replace("{nl}", chr(10))
+        return text
 
     def open_settings(self):
         if self._settings_win and self._settings_win.winfo_exists():
