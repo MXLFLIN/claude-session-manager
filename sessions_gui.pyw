@@ -22,7 +22,7 @@ except Exception:
     pass
 
 PROJECTS_ROOT = Path.home() / ".claude" / "projects"
-RECYCLE_NAME = "_回收站"
+RECYCLE_NAME = "_claude_session_recycle"
 
 
 # ---------- 读数据 ----------
@@ -38,12 +38,13 @@ def message_text(msg):
     return ""
 
 
-def scan_sessions():
+def scan_sessions(include_recycle=False):
     sessions = []
-    if not PROJECTS_ROOT.exists():
+    base = (PROJECTS_ROOT / RECYCLE_NAME) if include_recycle else PROJECTS_ROOT
+    if not base.exists():
         return sessions
-    for f in PROJECTS_ROOT.glob("*/*.jsonl"):
-        if f.parent.name == RECYCLE_NAME:
+    for f in base.glob("*/*.jsonl"):
+        if not include_recycle and f.parent.name == RECYCLE_NAME:
             continue
         title, first, count, cwd = "", "", 0, ""
         try:
@@ -81,6 +82,7 @@ def scan_sessions():
             "count": count,
             "size": f.stat().st_size,
             "mtime": mtime,
+            "recycled": include_recycle,
         })
     sessions.sort(key=lambda s: s["mtime"], reverse=True)
     return sessions
@@ -102,6 +104,27 @@ def project_label(name):
     return name
 
 
+def migrate_old_recycle():
+    """老版本用的中文目录名, 启动时并到新目录里。"""
+    old = PROJECTS_ROOT / "_回收站"
+    new = PROJECTS_ROOT / RECYCLE_NAME
+    if not old.is_dir():
+        return
+    new.mkdir(parents=True, exist_ok=True)
+    for child in old.iterdir():
+        dest = new / child.name
+        if dest.exists():
+            continue
+        try:
+            shutil.move(str(child), str(dest))
+        except OSError:
+            pass
+    try:
+        old.rmdir()
+    except OSError:
+        pass
+
+
 # ---------- 窗口 ----------
 class App:
     def __init__(self, root, dpi=96):
@@ -109,6 +132,7 @@ class App:
         self.scale = dpi / 96.0
         self.data = []
         self.shown = []
+        self.mode = "active"          # active = 会话列表, recycle = 回收站
         root.title("Claude 对话管理")
         root.geometry(f"{int(920 * self.scale)}x{int(560 * self.scale)}")
         root.minsize(int(700 * self.scale), int(380 * self.scale))
@@ -163,9 +187,11 @@ class App:
         self.open_btn = ttk.Button(bottom, text="打开此对话", command=self.open_session,
                                    state="disabled")
         self.open_btn.pack(side="left")
-        ttk.Button(bottom, text="移到回收站", command=self.recycle).pack(side="left", padx=(6, 0))
+        self.recycle_btn = ttk.Button(bottom, text="移到回收站", command=self.recycle)
+        self.recycle_btn.pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="打开所在文件夹", command=self.open_folder).pack(side="left", padx=6)
-        ttk.Button(bottom, text="打开回收站", command=self.open_recycle).pack(side="left")
+        self.mode_btn = ttk.Button(bottom, text="打开回收站", command=self.toggle_mode)
+        self.mode_btn.pack(side="left")
         self.status = ttk.Label(bottom, text="")
         self.status.pack(side="right")
 
@@ -177,7 +203,7 @@ class App:
         threading.Thread(target=self._load_worker, daemon=True).start()
 
     def _load_worker(self):
-        data = scan_sessions()
+        data = scan_sessions(self.mode == "recycle")
         self.root.after(0, lambda: self._loaded(data))
 
     def _loaded(self, data):
@@ -202,7 +228,8 @@ class App:
                 s["count"],
                 human_size(s["size"]),
             ))
-        self.status.config(text=f"共 {len(self.data)} 条, 筛出 {len(self.shown)} 条")
+        prefix = "回收站 · " if self.mode == "recycle" else ""
+        self.status.config(text=f"{prefix}共 {len(self.data)} 条, 筛出 {len(self.shown)} 条")
         self._on_select()
 
     def selected(self):
@@ -238,6 +265,8 @@ class App:
             messagebox.showerror("打开失败", str(e))
 
     def recycle(self):
+        if self.mode != "active":       # 双保险: 回收站视图里不能再回收
+            return
         items = self.selected()
         if not items:
             messagebox.showinfo("提示", "先选中要处理的对话(可按住 Ctrl 多选)。")
@@ -274,10 +303,46 @@ class App:
         target = items[0]["path"] if items else PROJECTS_ROOT
         subprocess.Popen(["explorer", "/select,", str(target)])
 
-    def open_recycle(self):
-        folder = PROJECTS_ROOT / RECYCLE_NAME
-        folder.mkdir(parents=True, exist_ok=True)   # 还没有就建一个空的
-        subprocess.Popen(["explorer", str(folder)])
+    def toggle_mode(self):
+        """在主列表和回收站之间来回切。"""
+        if self.mode == "active":
+            self.mode = "recycle"
+            self.mode_btn.configure(text="打开会话列表")
+            self.open_btn.configure(text="恢复此对话", command=self.restore_session)
+            self.recycle_btn.state(["disabled"])
+        else:
+            self.mode = "active"
+            self.mode_btn.configure(text="打开回收站")
+            self.open_btn.configure(text="打开此对话", command=self.open_session)
+            self.recycle_btn.state(["!disabled"])
+        self.q.set("")
+        self.load()
+
+    def restore_session(self):
+        """把回收站里的对话搬回原来的项目文件夹。"""
+        if self.mode != "recycle":      # 双保险: 只在回收站视图里才恢复
+            return
+        items = [x for x in self.selected()
+                 if str(x["path"]).startswith(str(PROJECTS_ROOT / RECYCLE_NAME))]
+        if not items:
+            return
+        restored = 0
+        for s in items:
+            dest_dir = PROJECTS_ROOT / s["project"]
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            target = dest_dir / s["path"].name
+            if target.exists():
+                target = dest_dir / f"{s['sid']}_{datetime.now():%H%M%S}.jsonl"
+            try:
+                shutil.move(str(s["path"]), str(target))
+                sub = s["path"].with_suffix("")   # 同名文件夹(子代理记录)
+                if sub.is_dir():
+                    shutil.move(str(sub), str(dest_dir / sub.name))
+                restored += 1
+            except OSError as e:
+                messagebox.showerror("恢复失败", s["path"].name + chr(10) + str(e))
+        if restored:
+            self.load()
 
     def show_detail(self, _event=None):
         items = self.selected()
@@ -322,6 +387,7 @@ def enable_dark_titlebar(root):
 
 
 def main():
+    migrate_old_recycle()
     root = tk.Tk()
     try:
         dpi = ctypes.windll.user32.GetDpiForSystem()
