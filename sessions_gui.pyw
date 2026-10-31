@@ -178,7 +178,8 @@ class App:
         except Exception:
             pass
 
-        self.tree.bind("<Double-1>", self.show_detail)
+        self.tree.bind("<Button-1>", self._on_click)
+        self.tree.bind("<Double-1>", self._on_double_click)
         self.tree.bind("<Button-3>", self._popup)      # 右键菜单
 
         self.menu = tk.Menu(self.root, tearoff=0)
@@ -240,6 +241,19 @@ class App:
 
     def selected(self):
         return [self.shown[int(i)] for i in self.tree.selection()]
+
+    def _on_click(self, event):
+        """点空白处 = 取消选中。"""
+        if not self.tree.identify_row(event.y):
+            self.tree.selection_remove(self.tree.selection())
+
+    def _on_double_click(self, event):
+        """只有真的双击在某一行上才打开详情。"""
+        row = self.tree.identify_row(event.y)
+        if not row:
+            return
+        self.tree.selection_set(row)
+        self.show_detail()
 
     def _popup(self, event):
         row = self.tree.identify_row(event.y)
