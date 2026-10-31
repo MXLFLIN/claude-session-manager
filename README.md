@@ -1,58 +1,62 @@
-# Claude 对话管理 (claude-session-manager)
+# Claude Session Manager (claude-session-manager)
 
-一个 Windows 小工具,用列表加搜索管理 **Claude Code 的历史对话**。
+A small Windows tool for managing **Claude Code session history** with a list and search.
 
-Claude Code 每次对话都保存在本地 `~/.claude/projects/<项目>/<会话id>.jsonl`,
-文件名是一串 UUID,无法直接辨认。这个工具把对话列成表格,支持搜索、排序、移入回收站和恢复。
+Claude Code stores every session locally as `~/.claude/projects/<project>/<session-id>.jsonl`,
+where the file name is a UUID. This tool lists those sessions, makes them searchable,
+and lets you move them out of the way.
 
-[English](README.en.md)
+[Chinese version](README.zh.md)
 
-## 功能
+## Features
 
-- 列出所有对话:时间、标题、项目、消息数、大小
-- 标题取自 Claude 生成的 `ai-title`;没有生成过标题的,使用第一句用户消息
-- 搜索框边输入边筛选(标题、首句、项目路径、日期)
-- 点击列标题排序,再次点击反向
-- 每 30 秒静默刷新一次,并保留当前选中项
-- 「打开回收站」把列表切换到回收站内容,选中的对话可以恢复回原项目目录
-- 「打开此对话」在新终端中原项目目录执行 `claude --resume <会话id>`
-- 「移到回收站」把文件移入 `projects/_claude_session_recycle/`,不删除,可恢复
-- 右键任意一行:打开此对话、移到回收站、打开文件位置、详情
-- 回收站视图的右键菜单多一项红色「彻底删除此对话」,二次确认后从磁盘删除
-- 移入回收站前检查最近 60 秒内的写入,可能正在使用的对话会先给出提示
-- 双击一行查看详情(标题、完整首句、路径、会话 ID)
-- 界面支持中文和 English,可在「配置」中即时切换
-- 配置窗口中可一键打开 `~/.claude/CLAUDE.md`
+- Lists all sessions with time, title, project, message count and file size
+- Titles come from Claude's own generated title (`ai-title`); if none exists, the first user message is used
+- Search filters as you type (title, first message, project path, date)
+- Click a column header to sort; click again to reverse
+- Refreshes silently every 30 seconds and keeps the current selection
+- "Open Recycle Bin" switches the list to recycled sessions; selected ones can be restored
+- "Open session" launches a new console in the original project directory and runs `claude --resume <id>`
+- "Move to Recycle Bin" moves the `.jsonl` into `projects/_claude_session_recycle/`; nothing is deleted
+- Right-click any row: open session / move to recycle bin / show in folder / details
+- In the recycle view, the context menu adds a red "Delete permanently" item (confirmation required)
+- Before moving, sessions written to within the last 60 seconds are flagged as possibly in use
+- Double-click a row for details (title, first message, path, session ID)
+- UI available in Chinese and English; switch at runtime in Settings
+- Settings window also has a button that opens `~/.claude/CLAUDE.md`
 
-## 用法
+## Usage
 
-双击 **`ClaudeSessionManager.exe`**(不出现控制台窗口)。
+Double-click **`ClaudeSessionManager.exe`** (no console window).
 
-也可以双击 `sessions_gui.pyw`(需要 Python 3,无需第三方库)。
+Alternatively, double-click `sessions_gui.pyw` (requires Python 3, no third-party packages).
 
-exe 由 `launcher.c` 编译而成(约 65 KB),作用是用 `pythonw.exe` 启动同目录下的 pyw 文件。
-因此 exe 与 pyw 必须放在同一文件夹,且本机需要安装 Python。
+The exe is a small launcher compiled from `launcher.c` (about 65 KB). It starts
+`pythonw.exe` on the `.pyw` file in the same directory, so the exe and the pyw
+must stay in the same folder, and Python must be installed.
 
-命令行:
+Command line:
 
 ```bash
 pythonw sessions_gui.pyw
 ```
 
-## 注意
+## Notes
 
-- 只读取本机的 Claude Code 记录,不联网,不上传任何内容。
-- 「回收站」指把文件移动到 `projects/_claude_session_recycle/`;恢复时移回 `projects/<项目>/`。
-- 移入回收站针对的是 Claude Code 的会话文件;打开对话需要本机可执行 `claude` 命令。
-- 正在使用的对话文件可能持续写入,移动前建议先结束该对话。
+- Reads local Claude Code data only. No network access, nothing is uploaded.
+- "Recycle Bin" means the files are moved into `projects/_claude_session_recycle/`.
+  Restoring moves them back into `projects/<project>/`.
+- The app does not open the sessions themselves; it starts the `claude` CLI.
+- Moving a session that is currently in use can cause file conflicts. Prefer closing it first.
 
-## 原理
+## How it works
 
-每个 `.jsonl` 文件一行是一条 JSON 记录,工具主要做三件事:
+Each `.jsonl` file contains one JSON record per line. The tool does three things:
 
-1. 找到第一条真正的用户消息,在没有 `ai-title` 时作为标题;
-2. 统计 `user` 与 `assistant` 记录条数;
-3. 在项目目录与回收站目录之间移动文件;Claude Code 的 `--resume` 只显示项目目录内的会话。
+1. Finds the first real user message and uses it as the title when no `ai-title` exists.
+2. Counts `user` and `assistant` records.
+3. Moves files between the project folder and the recycle folder; Claude Code's
+   `--resume` list only shows files in the project folders.
 
 ## License
 
