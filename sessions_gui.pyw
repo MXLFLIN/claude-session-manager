@@ -165,6 +165,7 @@ class App:
         self.open_btn.pack(side="left")
         ttk.Button(bottom, text="移到回收站", command=self.recycle).pack(side="left", padx=(6, 0))
         ttk.Button(bottom, text="打开所在文件夹", command=self.open_folder).pack(side="left", padx=6)
+        ttk.Button(bottom, text="打开回收站", command=self.open_recycle).pack(side="left")
         self.status = ttk.Label(bottom, text="")
         self.status.pack(side="right")
 
@@ -246,7 +247,8 @@ class App:
         if not messagebox.askyesno(
                 "移到回收站",
                 f"确定把「{preview}」{more} 移到回收站?\n\n"
-                "文件不会删除, 只是从对话列表里藏起来, 以后能搬回来。"):
+                "文件将不会被彻底删除, 将会移动到回收站文件夹, 以后可以恢复。\n\n"
+                f"回收站位置: {PROJECTS_ROOT / RECYCLE_NAME}"):
             return
         dest_root = PROJECTS_ROOT / RECYCLE_NAME
         moved = 0
@@ -271,6 +273,11 @@ class App:
         items = self.selected()
         target = items[0]["path"] if items else PROJECTS_ROOT
         subprocess.Popen(["explorer", "/select,", str(target)])
+
+    def open_recycle(self):
+        folder = PROJECTS_ROOT / RECYCLE_NAME
+        folder.mkdir(parents=True, exist_ok=True)   # 还没有就建一个空的
+        subprocess.Popen(["explorer", str(folder)])
 
     def show_detail(self, _event=None):
         items = self.selected()
