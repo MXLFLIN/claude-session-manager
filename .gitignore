@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+_回收站/
+*.jsonl
+.venv/
