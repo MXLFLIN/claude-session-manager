@@ -216,7 +216,10 @@ class App:
         self.lang = self.cfg.get("lang", "en")
         self._settings_win = None
         root.title(self.t("app_title"))
-        root.geometry(f"{int(920 * self.scale)}x{int(560 * self.scale)}")
+        w, h = int(920 * self.scale), int(560 * self.scale)
+        x = max(0, (root.winfo_screenwidth() - w) // 2)
+        y = max(0, (root.winfo_screenheight() - h) // 2)
+        root.geometry(f"{w}x{h}+{x}+{y}")
         root.minsize(int(700 * self.scale), int(380 * self.scale))
 
         base = ttk.Frame(root, padding=(10, 8, 10, 6))
@@ -391,18 +394,24 @@ class App:
         win.resizable(False, False)
         body = ttk.Frame(win, padding=14)
         body.pack(fill="both", expand=True)
-        ttk.Label(body, text=self.t("language")).grid(row=0, column=0, sticky="w")
-        combo = ttk.Combobox(body, values=["中文", "English"],
-                             state="readonly", width=14)
+        self._set_win = win
+        self._set_lbl = ttk.Label(body, text=self.t("language"))
+        self._set_lbl.grid(row=0, column=0, sticky="w")
+        combo = self._set_combo = ttk.Combobox(body, values=["中文", "English"],
+                                               state="readonly", width=14)
         combo.set("English" if self.lang == "en" else "中文")
         combo.grid(row=0, column=1, sticky="w", padx=(10, 0))
         combo.bind("<<ComboboxSelected>>",
                    lambda e: self.set_language("en" if combo.get() == "English" else "zh"))
-        ttk.Button(body, text=self.t("open_memory"),
-                   command=self.open_memory).grid(
-            row=1, column=0, columnspan=2, sticky="w", pady=(16, 0))
-        ttk.Button(body, text=self.t("close"), command=win.destroy).grid(
-            row=2, column=1, sticky="e", pady=(16, 0))
+        self._set_btn_mem = ttk.Button(body, text=self.t("open_memory"),
+                                       command=self.open_memory)
+        self._set_btn_mem.grid(row=1, column=0, columnspan=2, sticky="w", pady=(16, 0))
+        self._set_btn_close = ttk.Button(body, text=self.t("close"), command=win.destroy)
+        self._set_btn_close.grid(row=2, column=1, sticky="e", pady=(16, 0))
+        win.update_idletasks()
+        px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
+        pw, ph = self.root.winfo_width(), self.root.winfo_height()
+        win.geometry(f"+{px + (pw - win.winfo_width()) // 2}+{py + (ph - win.winfo_height()) // 2}")
         body.columnconfigure(1, weight=1)
 
     def set_language(self, lang):
@@ -430,8 +439,10 @@ class App:
         self.menu.entryconfigure(self.menu.index("end"), label=self.t("menu_detail"))
         self.refresh_view()
         if self._settings_win and self._settings_win.winfo_exists():
-            self._settings_win.destroy()
-            self.open_settings()
+            self._settings_win.title(self.t("settings"))
+            self._set_lbl.configure(text=self.t("language"))
+            self._set_btn_mem.configure(text=self.t("open_memory"))
+            self._set_btn_close.configure(text=self.t("close"))
 
     def open_memory(self):
         if MEMORY_PATH.exists():
