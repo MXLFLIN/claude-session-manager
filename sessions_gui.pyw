@@ -185,17 +185,10 @@ class App:
         self.menu.add_command(label="移到回收站", command=self.recycle)
         self.menu.add_command(label="打开此对话", command=self.open_session)
         self.menu.add_command(label="打开文件位置", command=self.open_folder)
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
         # 底部按钮 + 状态
         bottom = ttk.Frame(root, padding=(10, 0, 10, 8))
         bottom.pack(fill="x")
-        self.open_btn = ttk.Button(bottom, text="打开此对话", command=self.open_session,
-                                   state="disabled")
-        self.open_btn.pack(side="left")
-        self.recycle_btn = ttk.Button(bottom, text="移到回收站", command=self.recycle)
-        self.recycle_btn.pack(side="left", padx=(6, 0))
-        ttk.Button(bottom, text="打开所在文件夹", command=self.open_folder).pack(side="left", padx=6)
         self.mode_btn = ttk.Button(bottom, text="打开回收站", command=self.toggle_mode)
         self.mode_btn.pack(side="left")
         self.status = ttk.Label(bottom, text="")
@@ -236,7 +229,6 @@ class App:
             ))
         prefix = "回收站 · " if self.mode == "recycle" else ""
         self.status.config(text=f"{prefix}共 {len(self.data)} 条, 筛出 {len(self.shown)} 条")
-        self._on_select()
 
     def selected(self):
         return [self.shown[int(i)] for i in self.tree.selection()]
@@ -259,10 +251,6 @@ class App:
             self.menu.grab_release()
 
     # ----- 操作 -----
-    def _on_select(self, _event=None):
-        """选中东西时「打开此对话」才亮, 否则灰着。"""
-        self.open_btn.state(["!disabled"] if self.tree.selection() else ["disabled"])
-
     def open_session(self):
         items = self.selected()
         if not items:
@@ -331,13 +319,9 @@ class App:
         if self.mode == "active":
             self.mode = "recycle"
             self.mode_btn.configure(text="打开会话列表")
-            self.open_btn.configure(text="恢复此对话", command=self.restore_session)
-            self.recycle_btn.state(["disabled"])
         else:
             self.mode = "active"
             self.mode_btn.configure(text="打开回收站")
-            self.open_btn.configure(text="打开此对话", command=self.open_session)
-            self.recycle_btn.state(["!disabled"])
         self.q.set("")
         self.load()
 
