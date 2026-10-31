@@ -6,6 +6,7 @@
 """
 import ctypes
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -224,10 +225,14 @@ class App:
         cwd = s.get("cwd") or ""
         if cwd and Path(cwd).is_dir():
             kwargs["cwd"] = cwd
+        env = os.environ.copy()
+        # 别把「我是 Claude 派生的子会话」这个标记传给新会话, 否则它不保存聊天记录
+        for key in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT"):
+            env.pop(key, None)
         try:
             subprocess.Popen(
                 ["cmd", "/k", f"chcp 65001>nul & claude --resume {sid}"],
-                creationflags=subprocess.CREATE_NEW_CONSOLE, **kwargs)
+                creationflags=subprocess.CREATE_NEW_CONSOLE, env=env, **kwargs)
         except OSError as e:
             messagebox.showerror("打开失败", str(e))
 
