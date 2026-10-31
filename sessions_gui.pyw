@@ -182,9 +182,11 @@ class App:
         self.tree.bind("<Button-3>", self._popup)      # 右键菜单
 
         self.menu = tk.Menu(self.root, tearoff=0)
-        self.menu.add_command(label="移到回收站", command=self.recycle)
         self.menu.add_command(label="打开此对话", command=self.open_session)
+        self.menu.add_command(label="移到回收站", command=self.recycle)
         self.menu.add_command(label="打开文件位置", command=self.open_folder)
+        self.menu.add_separator()
+        self.menu.add_command(label="详情", command=self.show_detail)
 
         # 底部按钮 + 状态
         bottom = ttk.Frame(root, padding=(10, 0, 10, 8))
@@ -198,14 +200,19 @@ class App:
 
     # ----- 加载 -----
     def load(self):
+        self.load_seq = getattr(self, "load_seq", 0) + 1
+        seq, mode = self.load_seq, self.mode
         self.status.config(text="正在读取…")
-        threading.Thread(target=self._load_worker, daemon=True).start()
+        threading.Thread(target=self._load_worker, args=(seq, mode), daemon=True).start()
 
-    def _load_worker(self):
-        data = scan_sessions(self.mode == "recycle")
-        self.root.after(0, lambda: self._loaded(data))
+    def _load_worker(self, seq, mode):
+        data = scan_sessions(mode == "recycle")
+        self.root.after(0, lambda: self._loaded(seq, mode, data))
 
-    def _loaded(self, data):
+    def _loaded(self, seq, mode, data):
+        # 快速切换视图时, 旧线程的结果可能后到 —— 不是当前这次请求就丢掉
+        if seq != getattr(self, "load_seq", seq) or mode != self.mode:
+            return
         self.data = data
         self.refresh_view()
 
@@ -242,9 +249,9 @@ class App:
         self.tree.focus(row)
         # 回收站视图里第一项换成「恢复此对话」
         if self.mode == "recycle":
-            self.menu.entryconfigure(0, label="恢复此对话", command=self.restore_session)
+            self.menu.entryconfigure(1, label="恢复此对话", command=self.restore_session)
         else:
-            self.menu.entryconfigure(0, label="移到回收站", command=self.recycle)
+            self.menu.entryconfigure(1, label="移到回收站", command=self.recycle)
         try:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
