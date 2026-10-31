@@ -179,6 +179,12 @@ class App:
             pass
 
         self.tree.bind("<Double-1>", self.show_detail)
+        self.tree.bind("<Button-3>", self._popup)      # 右键菜单
+
+        self.menu = tk.Menu(self.root, tearoff=0)
+        self.menu.add_command(label="移到回收站", command=self.recycle)
+        self.menu.add_command(label="打开此对话", command=self.open_session)
+        self.menu.add_command(label="打开文件位置", command=self.open_folder)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
         # 底部按钮 + 状态
@@ -234,6 +240,23 @@ class App:
 
     def selected(self):
         return [self.shown[int(i)] for i in self.tree.selection()]
+
+    def _popup(self, event):
+        row = self.tree.identify_row(event.y)
+        if not row:
+            return
+        if row not in self.tree.selection():
+            self.tree.selection_set(row)
+        self.tree.focus(row)
+        # 回收站视图里第一项换成「恢复此对话」
+        if self.mode == "recycle":
+            self.menu.entryconfigure(0, label="恢复此对话", command=self.restore_session)
+        else:
+            self.menu.entryconfigure(0, label="移到回收站", command=self.recycle)
+        try:
+            self.menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.menu.grab_release()
 
     # ----- 操作 -----
     def _on_select(self, _event=None):
