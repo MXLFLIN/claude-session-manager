@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -55,6 +56,9 @@ TR = {
         "err_open": "打开失败", "err_move": "搬移失败",
         "err_restore": "恢复失败", "err_delete": "删除失败",
         "err_badid": "会话 ID 看起来不对, 不敢拼进命令里。",
+        "loading": "正在读取…",
+        "warn_title": "检测到正在使用的对话",
+        "warn_active": "有 {n} 条对话在最近 60 秒内仍有写入, 可能正在使用中。仍要移入回收站吗?",
     },
     "en": {
         "app_title": "Claude Session Manager",
@@ -84,6 +88,9 @@ TR = {
         "err_open": "Cannot open", "err_move": "Move failed",
         "err_restore": "Restore failed", "err_delete": "Delete failed",
         "err_badid": "The session ID looks invalid; refusing to run it.",
+        "loading": "Loading...",
+        "warn_title": "Active session detected",
+        "warn_active": "{n} session(s) were written to within the last 60 seconds and may still be in use. Move to Recycle Bin anyway?",
     },
 }
 
@@ -215,6 +222,9 @@ class App:
         self.cfg = load_config()
         self.lang = self.cfg.get("lang", "en")
         self._settings_win = None
+        self.sort_col = "time"
+        self.sort_desc = True
+        self._auto_job = None
         root.title(self.t("app_title"))
         w, h = int(920 * self.scale), int(560 * self.scale)
         x = max(0, (root.winfo_screenwidth() - w) // 2)
@@ -250,7 +260,8 @@ class App:
             ("count", "col_count", 70, "e"),
             ("size", "col_size", 70, "e"),
         ):
-            self.tree.heading(c, text=self.t(key))
+            self.tree.heading(c, text=self.t(key),
+                              command=lambda col=c: self.sort_by(col))
             self.tree.column(c, width=int(w * self.scale), anchor=anchor,
                              stretch=(c == "title"))
         sb = ttk.Scrollbar(base, orient="vertical", command=self.tree.yview)
@@ -291,14 +302,27 @@ class App:
         self.status = ttk.Label(bottom, text="")
         self.status.pack(side="right")
 
+        self._update_headings()
         self.load()
+        self._schedule_auto()
 
     # ----- 加载 -----
-    def load(self):
+    def load(self, silent=False):
         self.load_seq = getattr(self, "load_seq", 0) + 1
         seq, mode = self.load_seq, self.mode
-        self.status.config(text="正在读取…")
+        if not silent:
+            self.status.config(text=self.t("loading"))
         threading.Thread(target=self._load_worker, args=(seq, mode), daemon=True).start()
+
+    def _schedule_auto(self):
+        """每 30 秒静默重读一次, 保持列表可信。"""
+        if self._auto_job is None:
+            self._auto_job = self.root.after(30000, self._auto_tick)
+
+    def _auto_tick(self):
+        self._auto_job = None
+        self.load(silent=True)
+        self._schedule_auto()
 
     def _load_worker(self, seq, mode):
         data = scan_sessions(mode == "recycle")
@@ -308,10 +332,43 @@ class App:
         # 快速切换视图时, 旧线程的结果可能后到 —— 不是当前这次请求就丢掉
         if seq != getattr(self, "load_seq", seq) or mode != self.mode:
             return
+        keep = {x["sid"] for x in self.selected()}
         self.data = data
         self.refresh_view()
+        if keep:
+            for i, x in enumerate(self.shown):
+                if x["sid"] in keep:
+                    self.tree.selection_add(self.tree.get_children()[i])
 
     # ----- 过滤 + 画表 -----
+    def _sort_key(self, x):
+        col = self.sort_col
+        if col == "time":
+            return x["mtime"]
+        if col == "count":
+            return x["count"]
+        if col == "size":
+            return x["size"]
+        if col == "project":
+            return (x["cwd"] or project_label(x["project"])).lower()
+        return (x["title"] or "").lower()
+
+    def _update_headings(self):
+        arrow = " \u2193" if self.sort_desc else " \u2191"
+        for c, key in (("time", "col_time"), ("title", "col_title"),
+                       ("project", "col_project"), ("count", "col_count"),
+                       ("size", "col_size")):
+            self.tree.heading(c, text=self.t(key) + (arrow if c == self.sort_col else ""))
+
+    def sort_by(self, col):
+        if col == self.sort_col:
+            self.sort_desc = not self.sort_desc
+        else:
+            self.sort_col = col
+            self.sort_desc = col in ("time", "count", "size")
+        self._update_headings()
+        self.refresh_view()
+
     def refresh_view(self):
         q = self.q.get().strip().lower()
         self.shown = []
@@ -319,6 +376,7 @@ class App:
             hay = f"{s['title']} {s['first']} {s['cwd'] or project_label(s['project'])} {s['mtime']:%Y-%m-%d %H:%M}".lower()
             if not q or q in hay:
                 self.shown.append(s)
+        self.shown.sort(key=self._sort_key, reverse=self.sort_desc)
 
         self.tree.delete(*self.tree.get_children())
         for i, s in enumerate(self.shown):
@@ -428,10 +486,7 @@ class App:
         self.btn_settings.configure(text=self.t("settings"))
         self.mode_btn.configure(text=self.t("open_recycle")
                                 if self.mode == "active" else self.t("open_list"))
-        for c, key in (("time", "col_time"), ("title", "col_title"),
-                       ("project", "col_project"), ("count", "col_count"),
-                       ("size", "col_size")):
-            self.tree.heading(c, text=self.t(key))
+        self._update_headings()
         self.menu.entryconfigure(0, label=self.t("menu_open"))
         self.menu.entryconfigure(1, label=self.t("menu_restore")
                                  if self.mode == "recycle" else self.t("menu_recycle"))
@@ -482,6 +537,15 @@ class App:
         if not items:
             messagebox.showinfo(self.t("settings"), self.t("hint_select"))
             return
+        now = time.time()
+        recent = [x for x in items if now - x["mtime"].timestamp() < 60]
+        if recent:
+            if not messagebox.askyesno(
+                    self.t("warn_title"),
+                    self.t("warn_active", n=len(recent)), icon="warning"):
+                items = [x for x in items if x not in recent]
+                if not items:
+                    return
         preview = items[0]["title"][:40]
         more = self.t("more", n=len(items)) if len(items) > 1 else ""
         if not messagebox.askyesno(
