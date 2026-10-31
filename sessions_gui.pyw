@@ -116,13 +116,13 @@ class App:
         # 顶部: 搜索 + 刷新
         top = ttk.Frame(base)
         top.pack(fill="x", pady=(0, 6))
+        ttk.Button(top, text="刷新", command=self.load).pack(side="right")
+        ttk.Button(top, text="清空", command=lambda: self.q.set("")).pack(side="right", padx=(0, 6))
         ttk.Label(top, text="搜索").pack(side="left")
         self.q = tk.StringVar()
         self.q.trace_add("write", lambda *_: self.refresh_view())
         entry = ttk.Entry(top, textvariable=self.q)
         entry.pack(side="left", fill="x", expand=True, padx=(6, 6))
-        ttk.Button(top, text="刷新", command=self.load).pack(side="left")
-        ttk.Button(top, text="清空", command=lambda: self.q.set("")).pack(side="left", padx=(6, 0))
 
         # 列表
         cols = ("time", "title", "project", "count", "size")
