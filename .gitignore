@@ -3,3 +3,4 @@ __pycache__/
 _回收站/
 *.jsonl
 .venv/
+*.exe
