@@ -56,6 +56,9 @@ pythonw sessions_gui.pyw
 2. 统计 `user` 与 `assistant` 记录条数;
 3. 在项目目录与回收站目录之间移动文件;Claude Code 的 `--resume` 只显示项目目录内的会话。
 
+扫描结果缓存在 `~/.claude/claude-session-manager-cache.json`,按文件修改时间和大小判定。
+未变化的文件不会重复读取,首次运行之后启动只需几毫秒。
+
 ## License
 
 MIT

@@ -25,6 +25,7 @@ except Exception:
 PROJECTS_ROOT = Path.home() / ".claude" / "projects"
 RECYCLE_NAME = "_claude_session_recycle"
 CONFIG_PATH = Path.home() / ".claude" / "claude-session-manager.json"
+CACHE_PATH = Path.home() / ".claude" / "claude-session-manager-cache.json"
 MEMORY_PATH = Path.home() / ".claude" / "CLAUDE.md"
 
 TR = {
@@ -128,40 +129,76 @@ def message_text(msg):
     return ""
 
 
+def load_cache():
+    try:
+        return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_cache(cache):
+    try:
+        CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def scan_sessions(include_recycle=False):
+    """扫描会话文件。文件没变时直接使用上次的解析结果。"""
     sessions = []
     base = (PROJECTS_ROOT / RECYCLE_NAME) if include_recycle else PROJECTS_ROOT
     if not base.exists():
         return sessions
+    cache = load_cache()
+    dirty = False
     for f in base.glob("*/*.jsonl"):
         if not include_recycle and f.parent.name == RECYCLE_NAME:
             continue
-        title, first, count, cwd = "", "", 0, ""
         try:
-            with f.open(encoding="utf-8", errors="ignore") as fh:
-                for line in fh:
-                    try:
-                        d = json.loads(line)
-                    except Exception:
-                        continue
-                    if not cwd and d.get("cwd"):
-                        cwd = d["cwd"]
-                    if d.get("isSidechain"):
-                        continue
-                    if d.get("type") in ("user", "assistant"):
-                        count += 1
-                    if d.get("type") == "ai-title" and d.get("aiTitle"):
-                        title = d["aiTitle"]      # AI 生成的对话标题
-                    if not first and d.get("type") == "user":
-                        t = message_text(d.get("message") or {}).strip()
-                        # 跳过 <system-reminder>、命令输出这类不是人说的话
-                        if t and not t.startswith("<"):
-                            first = " ".join(t.split())[:200]
+            st = f.stat()
         except OSError:
             continue
-        if count == 0:
+        key = str(f)
+        hit = cache.get(key)
+        if hit and hit.get("mtime") == st.st_mtime and hit.get("size") == st.st_size:
+            title = hit.get("title", "")
+            first = hit.get("first", "")
+            cwd = hit.get("cwd", "")
+            count = hit.get("count", 0)
+        else:
+            try:
+                raw = f.read_bytes()
+            except OSError:
+                continue
+            count = raw.count(b'"type":"user"') + raw.count(b'"type":"assistant"')
+            count -= raw.count(b'"isSidechain":true')
+            title, first, cwd = "", "", ""
+            for line in raw.split(bytes([10])):
+                if b'"type":"ai-title"' in line:
+                    try:
+                        v = json.loads(line).get("aiTitle")
+                        if v:
+                            title = v
+                    except Exception:
+                        pass
+                    continue
+                if not cwd and b'"cwd":"' in line:
+                    try:
+                        cwd = json.loads(line).get("cwd") or ""
+                    except Exception:
+                        pass
+                if not first and b'"type":"user"' in line and b'"isSidechain":true' not in line:
+                    try:
+                        t = message_text(json.loads(line).get("message") or {}).strip()
+                    except Exception:
+                        t = ""
+                    if t and not t.startswith("<"):
+                        first = " ".join(t.split())[:200]
+            cache[key] = {"mtime": st.st_mtime, "size": st.st_size,
+                          "title": title, "first": first, "cwd": cwd, "count": count}
+            dirty = True
+        if count <= 0:
             continue
-        mtime = datetime.fromtimestamp(f.stat().st_mtime)
         sessions.append({
             "path": f,
             "sid": f.stem,
@@ -170,11 +207,13 @@ def scan_sessions(include_recycle=False):
             "title": title or first[:80] or "(无标题)",
             "first": first,
             "count": count,
-            "size": f.stat().st_size,
-            "mtime": mtime,
+            "size": st.st_size,
+            "mtime": datetime.fromtimestamp(st.st_mtime),
             "recycled": include_recycle,
         })
-    sessions.sort(key=lambda s: s["mtime"], reverse=True)
+    if dirty:
+        save_cache(cache)
+    sessions.sort(key=lambda x: x["mtime"], reverse=True)
     return sessions
 
 

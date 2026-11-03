@@ -60,6 +60,10 @@ Each `.jsonl` file contains one JSON record per line. The tool does three things
 3. Moves files between the project folder and the recycle folder; Claude Code's
    `--resume` list only shows files in the project folders.
 
+Scan results are cached in `~/.claude/claude-session-manager-cache.json` and keyed by
+file modification time and size. Unchanged files are not re-read, so startup after
+the first run takes a few milliseconds.
+
 ## License
 
 MIT
