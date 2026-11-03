@@ -36,6 +36,7 @@ TR = {
         "col_count": "消息数", "col_size": "大小",
         "settings": "配置", "language": "语言",
         "open_memory": "打开 Claude Code 全局记忆文件",
+        "clear_cache": "清除缓存", "cache_cleared": "缓存已清除, 下次读取会重新解析全部会话。",
         "memory_missing": "找不到全局记忆文件",
         "close": "关闭",
         "open_recycle": "打开回收站", "open_list": "打开会话列表",
@@ -70,6 +71,7 @@ TR = {
         "col_count": "Messages", "col_size": "Size",
         "settings": "Settings", "language": "Language",
         "open_memory": "Open Claude Code global memory file",
+        "clear_cache": "Clear cache", "cache_cleared": "Cache cleared. The next load will re-scan every session.",
         "memory_missing": "Global memory file not found",
         "close": "Close",
         "open_recycle": "Open Recycle Bin", "open_list": "Back to Sessions",
@@ -529,9 +531,14 @@ class App:
         self._set_btn_browse = ttk.Button(body, text=self.t("browse"),
                                           command=self._pick_dir, width=9)
         self._set_btn_browse.grid(row=1, column=3, sticky="e", pady=(12, 0))
-        self._set_btn_mem = ttk.Button(body, text=self.t("open_memory"),
+        row2 = ttk.Frame(body)
+        row2.grid(row=2, column=0, columnspan=4, sticky="w", pady=(16, 0))
+        self._set_btn_mem = ttk.Button(row2, text=self.t("open_memory"),
                                        command=self.open_memory)
-        self._set_btn_mem.grid(row=2, column=0, columnspan=2, sticky="w", pady=(16, 0))
+        self._set_btn_mem.pack(side="left")
+        self._set_btn_cache = ttk.Button(row2, text=self.t("clear_cache"),
+                                         command=self.clear_cache)
+        self._set_btn_cache.pack(side="left", padx=(10, 0))
         self._set_btn_close = ttk.Button(body, text=self.t("close"), command=win.destroy)
         self._set_btn_close.grid(row=3, column=3, sticky="e", pady=(16, 0))
         win.update_idletasks()
@@ -540,6 +547,14 @@ class App:
         win.geometry(f"+{px + (pw - win.winfo_width()) // 2}+{py + (ph - win.winfo_height()) // 2}")
         body.columnconfigure(1, weight=1)
         body.columnconfigure(2, weight=0)
+
+    def clear_cache(self):
+        try:
+            CACHE_PATH.unlink(missing_ok=True)
+        except OSError:
+            pass
+        messagebox.showinfo(self.t("settings"), self.t("cache_cleared"))
+        self.load()
 
     def _pick_dir(self):
         start = self._set_dir.get() or str(Path.home())
@@ -582,6 +597,7 @@ class App:
             self._settings_win.title(self.t("settings"))
             self._set_lbl.configure(text=self.t("language"))
             self._set_btn_mem.configure(text=self.t("open_memory"))
+            self._set_btn_cache.configure(text=self.t("clear_cache"))
             self._set_lbl_dir.configure(text=self.t("new_dir"))
             self._set_btn_browse.configure(text=self.t("browse"))
             self._set_btn_close.configure(text=self.t("close"))

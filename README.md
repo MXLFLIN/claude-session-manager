@@ -25,7 +25,7 @@ and lets you move them out of the way.
 - Before moving, sessions written to within the last 60 seconds are flagged as possibly in use
 - Double-click a row for details (title, first message, path, session ID)
 - UI available in Chinese and English; switch at runtime in Settings
-- Settings window: language and default folder for new sessions, plus a button that opens `~/.claude/CLAUDE.md`
+- Settings window: language, default folder for new sessions, a button that opens `~/.claude/CLAUDE.md`, and a button that clears the scan cache
 
 ## Usage
 
