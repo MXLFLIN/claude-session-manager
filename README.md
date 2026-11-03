@@ -16,14 +16,16 @@ and lets you move them out of the way.
 - Click a column header to sort; click again to reverse
 - Refreshes silently every 30 seconds and keeps the current selection
 - "Open Recycle Bin" switches the list to recycled sessions; selected ones can be restored
+- Bottom bar: "Open session" (enabled when a row is selected) and "New session"
 - "Open session" launches a new console in the original project directory and runs `claude --resume <id>`
+- "New session" launches `claude` in a configurable folder (default: the user home directory)
 - "Move to Recycle Bin" moves the `.jsonl` into `projects/_claude_session_recycle/`; nothing is deleted
 - Right-click any row: open session / move to recycle bin / show in folder / details
 - In the recycle view, the context menu adds a red "Delete permanently" item (confirmation required)
 - Before moving, sessions written to within the last 60 seconds are flagged as possibly in use
 - Double-click a row for details (title, first message, path, session ID)
 - UI available in Chinese and English; switch at runtime in Settings
-- Settings window also has a button that opens `~/.claude/CLAUDE.md`
+- Settings window: language and default folder for new sessions, plus a button that opens `~/.claude/CLAUDE.md`
 
 ## Usage
 

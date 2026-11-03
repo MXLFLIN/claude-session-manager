@@ -15,7 +15,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 try:  # 高分屏不糊
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -38,6 +38,8 @@ TR = {
         "memory_missing": "找不到全局记忆文件",
         "close": "关闭",
         "open_recycle": "打开回收站", "open_list": "打开会话列表",
+        "btn_open": "打开此对话", "btn_new": "打开新对话",
+        "new_dir": "新对话默认目录", "browse": "浏览",
         "recycled_prefix": "回收站 · ",
         "status": "共 {total} 条, 筛出 {shown} 条",
         "menu_open": "打开此对话", "menu_recycle": "移到回收站",
@@ -70,6 +72,8 @@ TR = {
         "memory_missing": "Global memory file not found",
         "close": "Close",
         "open_recycle": "Open Recycle Bin", "open_list": "Back to Sessions",
+        "btn_open": "Open session", "btn_new": "New session",
+        "new_dir": "New session folder", "browse": "Browse",
         "recycled_prefix": "Recycle Bin | ",
         "status": "{total} sessions, {shown} shown",
         "menu_open": "Open session", "menu_recycle": "Move to Recycle Bin",
@@ -278,6 +282,7 @@ class App:
         except Exception:
             pass
 
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
         self.tree.bind("<Button-1>", self._on_click)
         self.tree.bind("<Double-1>", self._on_double_click)
         self.tree.bind("<Button-3>", self._popup)      # 右键菜单
@@ -299,6 +304,12 @@ class App:
         self.mode_btn = ttk.Button(bottom, text=self.t("open_recycle"),
                                    command=self.toggle_mode)
         self.mode_btn.pack(side="left", padx=(6, 0))
+        self.btn_open = ttk.Button(bottom, text=self.t("btn_open"),
+                                   command=self.open_session, state="disabled")
+        self.btn_open.pack(side="left", padx=(6, 0))
+        self.btn_new = ttk.Button(bottom, text=self.t("btn_new"),
+                                  command=self.new_session)
+        self.btn_new.pack(side="left", padx=(6, 0))
         self.status = ttk.Label(bottom, text="")
         self.status.pack(side="right")
 
@@ -390,9 +401,15 @@ class App:
         prefix = self.t("recycled_prefix") if self.mode == "recycle" else ""
         self.status.config(text=prefix + self.t(
             "status", total=len(self.data), shown=len(self.shown)))
+        self._on_select()
 
     def selected(self):
         return [self.shown[int(i)] for i in self.tree.selection()]
+
+    def _on_select(self, _event=None):
+        """只有会话列表里选中了东西, 「打开此对话」才可用。"""
+        ok = self.mode == "active" and bool(self.tree.selection())
+        self.btn_open.state(["!disabled"] if ok else ["disabled"])
 
     def _on_click(self, event):
         """点空白处 = 取消选中。"""
@@ -449,7 +466,7 @@ class App:
         win = self._settings_win = tk.Toplevel(self.root)
         win.title(self.t("settings"))
         win.transient(self.root)
-        win.geometry("480x190")
+        win.geometry("580x240")
         win.resizable(False, False)
         body = ttk.Frame(win, padding=14)
         body.pack(fill="both", expand=True)
@@ -462,16 +479,42 @@ class App:
         combo.grid(row=0, column=1, sticky="w", padx=(10, 0))
         combo.bind("<<ComboboxSelected>>",
                    lambda e: self.set_language("en" if combo.get() == "English" else "zh"))
+        self._set_lbl_dir = ttk.Label(body, text=self.t("new_dir"))
+        self._set_lbl_dir.grid(row=1, column=0, sticky="w", pady=(12, 0))
+        self._set_dir = tk.StringVar(
+            value=self.cfg.get("new_session_dir") or str(Path.home()))
+        ent = ttk.Entry(body, textvariable=self._set_dir, width=38)
+        ent.grid(row=1, column=1, columnspan=2, sticky="we", padx=(10, 6), pady=(12, 0))
+        ent.bind("<FocusOut>", lambda e: self._save_dir())
+        ent.bind("<Return>", lambda e: self._save_dir())
+        self._set_btn_browse = ttk.Button(body, text=self.t("browse"),
+                                          command=self._pick_dir, width=9)
+        self._set_btn_browse.grid(row=1, column=3, sticky="e", pady=(12, 0))
         self._set_btn_mem = ttk.Button(body, text=self.t("open_memory"),
                                        command=self.open_memory)
-        self._set_btn_mem.grid(row=1, column=0, columnspan=2, sticky="w", pady=(16, 0))
+        self._set_btn_mem.grid(row=2, column=0, columnspan=2, sticky="w", pady=(16, 0))
         self._set_btn_close = ttk.Button(body, text=self.t("close"), command=win.destroy)
-        self._set_btn_close.grid(row=2, column=1, sticky="e", pady=(16, 0))
+        self._set_btn_close.grid(row=3, column=3, sticky="e", pady=(16, 0))
         win.update_idletasks()
         px, py = self.root.winfo_rootx(), self.root.winfo_rooty()
         pw, ph = self.root.winfo_width(), self.root.winfo_height()
         win.geometry(f"+{px + (pw - win.winfo_width()) // 2}+{py + (ph - win.winfo_height()) // 2}")
         body.columnconfigure(1, weight=1)
+        body.columnconfigure(2, weight=0)
+
+    def _pick_dir(self):
+        start = self._set_dir.get() or str(Path.home())
+        d = filedialog.askdirectory(initialdir=start, parent=self._settings_win)
+        if d:
+            self._set_dir.set(d)
+            self._save_dir()
+
+    def _save_dir(self):
+        raw = self._set_dir.get().strip()
+        if raw and not Path(raw).is_dir():
+            return
+        self.cfg["new_session_dir"] = raw or str(Path.home())
+        save_config(self.cfg)
 
     def set_language(self, lang):
         self.lang = lang
@@ -485,6 +528,8 @@ class App:
         self.btn_clear.configure(text=self.t("clear"))
         self.btn_refresh.configure(text=self.t("refresh"))
         self.btn_settings.configure(text=self.t("settings"))
+        self.btn_open.configure(text=self.t("btn_open"))
+        self.btn_new.configure(text=self.t("btn_new"))
         self.mode_btn.configure(text=self.t("open_recycle")
                                 if self.mode == "active" else self.t("open_list"))
         self._update_headings()
@@ -498,6 +543,8 @@ class App:
             self._settings_win.title(self.t("settings"))
             self._set_lbl.configure(text=self.t("language"))
             self._set_btn_mem.configure(text=self.t("open_memory"))
+            self._set_lbl_dir.configure(text=self.t("new_dir"))
+            self._set_btn_browse.configure(text=self.t("browse"))
             self._set_btn_close.configure(text=self.t("close"))
 
     def open_memory(self):
@@ -528,6 +575,22 @@ class App:
             subprocess.Popen(
                 ["cmd", "/k", f"chcp 65001>nul & claude --resume {sid}"],
                 creationflags=subprocess.CREATE_NEW_CONSOLE, env=env, **kwargs)
+        except OSError as e:
+            messagebox.showerror(self.t("err_open"), str(e))
+
+    def new_session(self):
+        """在默认目录启动一个新的 claude 会话。"""
+        cwd = self.cfg.get("new_session_dir") or str(Path.home())
+        if not Path(cwd).is_dir():
+            cwd = str(Path.home())
+        env = os.environ.copy()
+        for key in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT"):
+            env.pop(key, None)
+        try:
+            subprocess.Popen(["cmd", "/k", "chcp 65001>nul & claude"],
+                             cwd=cwd,
+                             creationflags=subprocess.CREATE_NEW_CONSOLE,
+                             env=env)
         except OSError as e:
             messagebox.showerror(self.t("err_open"), str(e))
 
