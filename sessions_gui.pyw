@@ -22,6 +22,8 @@ try:  # 高分屏不糊
 except Exception:
     pass
 
+APP_ID = "MXLFLIN.ClaudeSessionManager"
+ICON_PATH = Path(__file__).with_name("app.ico")
 PROJECTS_ROOT = Path.home() / ".claude" / "projects"
 RECYCLE_NAME = "_claude_session_recycle"
 CONFIG_PATH = Path.home() / ".claude" / "claude-session-manager.json"
@@ -800,9 +802,39 @@ def enable_dark_titlebar(root):
         pass
 
 
+def set_app_identity(root):
+    """让任务栏把本程序当成独立应用, 并使用 app.ico 作为图标。"""
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except Exception:
+        pass
+    try:
+        if ICON_PATH.exists():
+            root.iconbitmap(default=str(ICON_PATH))
+    except Exception:
+        pass
+    root.after(300, lambda: apply_taskbar_icon(root))
+
+
+def apply_taskbar_icon(root):
+    """给窗口句柄设置大/小图标, 任务栏按钮取的是这个。"""
+    try:
+        u = ctypes.windll.user32
+        hwnd = u.GetParent(root.winfo_id())
+        if not ICON_PATH.exists() or not hwnd:
+            return
+        for size, kind in ((32, 1), (16, 0)):
+            h = u.LoadImageW(None, str(ICON_PATH), 1, size, size, 0x10)
+            if h:
+                u.SendMessageW(hwnd, 0x80, kind, h)   # WM_SETICON
+    except Exception:
+        pass
+
+
 def main():
     migrate_old_recycle()
     root = tk.Tk()
+    set_app_identity(root)
     try:
         dpi = ctypes.windll.user32.GetDpiForSystem()
         root.tk.call("tk", "scaling", dpi / 72.0)
